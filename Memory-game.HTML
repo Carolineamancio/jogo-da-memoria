@@ -1,0 +1,199 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jogo da Memória</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0b2545;
+      color: #f8f9fa;
+    }
+
+    .game {
+      width: 360px;
+      padding: 18px;
+      background: #15263b;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      text-align: center;
+      font-size: 24px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      border: 2px solid #ffffff20;
+      background: #213455;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 32px;
+      color: transparent;
+      transition: transform 0.25s ease, background 0.25s ease;
+      user-select: none;
+    }
+
+    .card.flipped {
+      background: #f8f9fa;
+      color: #0b2545;
+      transform: scale(1.02);
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 0;
+      border: none;
+      border-radius: 999px;
+      background: #4f8cff;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #5f9eff;
+    }
+
+    .message {
+      text-align: center;
+      min-height: 22px;
+      color: #c7d2fe;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="game">
+    <h1>Jogo da Memória</h1>
+    <div class="status">
+      <span>Movimentos: <strong id="moves">0</strong></span>
+      <span>Pares: <strong id="pairs">0</strong>/4</span>
+    </div>
+    <div class="board" id="board"></div>
+    <button id="restart">Reiniciar</button>
+    <p class="message" id="message"></p>
+  </div>
+
+  <script>
+    // Lista de 4 símbolos diferentes, cada um aparece em par
+    const symbols = ['🍎', '🍌', '🍓', '🍇'];
+
+    const board = document.getElementById('board');
+    const movesCounter = document.getElementById('moves');
+    const pairsCounter = document.getElementById('pairs');
+    const message = document.getElementById('message');
+    const restartButton = document.getElementById('restart');
+
+    let cards = [];
+    let flipped = [];
+    let moves = 0;
+    let pairs = 0;
+    let locked = false;
+
+    // Cria as cartas e embaralha antes de mostrar
+    function setupGame() {
+      cards = shuffle([...symbols, ...symbols]);
+      board.innerHTML = '';
+      flipped = [];
+      moves = 0;
+      pairs = 0;
+      locked = false;
+      movesCounter.textContent = '0';
+      pairsCounter.textContent = '0';
+      message.textContent = '';
+
+      cards.forEach((symbol, index) => {
+        const card = document.createElement('button');
+        card.className = 'card';
+        card.type = 'button';
+        card.dataset.symbol = symbol;
+        card.dataset.index = index;
+        card.textContent = symbol;
+        card.addEventListener('click', () => flipCard(card));
+        board.appendChild(card);
+      });
+    }
+
+    // Embaralha o array usando o algoritmo Fisher-Yates
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    // Quando o jogador vira uma carta
+    function flipCard(card) {
+      if (locked || card.classList.contains('flipped')) {
+        return; // não permite virar cartas enquanto o tabuleiro está bloqueado ou a carta já está virada
+      }
+
+      card.classList.add('flipped');
+      flipped.push(card);
+
+      if (flipped.length === 2) {
+        moves += 1;
+        movesCounter.textContent = String(moves);
+        checkMatch();
+      }
+    }
+
+    // Verifica se as duas cartas viradas formam um par
+    function checkMatch() {
+      const [first, second] = flipped;
+      const sameSymbol = first.dataset.symbol === second.dataset.symbol;
+
+      if (sameSymbol) {
+        pairs += 1;
+        pairsCounter.textContent = String(pairs);
+        flipped = [];
+
+        if (pairs === symbols.length) {
+          message.textContent = 'Parabéns! Você encontrou todos os pares.';
+        }
+        return;
+      }
+
+      // Se não forem par, desvira após um tempo curto
+      locked = true;
+      setTimeout(() => {
+        first.classList.remove('flipped');
+        second.classList.remove('flipped');
+        flipped = [];
+        locked = false;
+      }, 800);
+    }
+
+    restartButton.addEventListener('click', setupGame);
+    setupGame();
+  </script>
+</body>
+</html>
