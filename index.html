@@ -228,7 +228,17 @@
     }
 
     function createPeerConnection() {
-      pc = new RTCPeerConnection();
+      // Add a public STUN server to improve NAT traversal
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) {
+          // gathering finished
+          console.log('ICE gathering complete');
+        }
+      };
 
       pc.ondatachannel = (e) => {
         dc = e.channel;
@@ -238,6 +248,32 @@
       pc.onconnectionstatechange = () => {
         updateStatus(pc.connectionState);
       };
+    }
+
+    // Wait until ICE gathering is complete so SDP contains candidates
+    function waitForIceGatheringComplete(pc) {
+      return new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          function checkState() {
+            if (pc.iceGatheringState === 'complete') {
+              pc.removeEventListener('icegatheringstatechange', checkState);
+              resolve();
+            }
+          }
+          pc.addEventListener('icegatheringstatechange', checkState);
+          // Fallback: also resolve when onicecandidate fires a null candidate
+          const handler = (e) => {
+            if (!e.candidate) {
+              pc.removeEventListener('icegatheringstatechange', checkState);
+              pc.removeEventListener('icecandidate', handler);
+              resolve();
+            }
+          };
+          pc.addEventListener('icecandidate', handler);
+        }
+      });
     }
 
     function setupDataChannel() {
@@ -283,9 +319,13 @@
       dc = pc.createDataChannel('game');
       setupDataChannel();
 
+      updateStatus('criando offer...');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      updateStatus('coletando candidatos ICE...');
+      await waitForIceGatheringComplete(pc);
       localSDP.value = JSON.stringify(pc.localDescription);
+      updateStatus('offer pronto (copie e cole)');
     });
 
     acceptOfferBtn.addEventListener('click', async () => {
@@ -294,17 +334,23 @@
       if (!txt) return alert('Cole o offer no campo direito e tente novamente.');
       const offer = JSON.parse(txt);
       createPeerConnection();
+      updateStatus('aceitando offer...');
       await pc.setRemoteDescription(offer);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      updateStatus('coletando candidatos ICE...');
+      await waitForIceGatheringComplete(pc);
       localSDP.value = JSON.stringify(pc.localDescription);
+      updateStatus('answer pronto (copie e cole)');
     });
 
     setAnswerBtn.addEventListener('click', async () => {
       const txt = remoteSDP.value.trim();
       if (!txt) return alert('Cole a answer aqui antes de definir.');
       const answer = JSON.parse(txt);
+      updateStatus('definindo answer...');
       await pc.setRemoteDescription(answer);
+      updateStatus('aguardando conexão...');
     });
 
     // Modify flipCard to optionally suppress sending to peer
