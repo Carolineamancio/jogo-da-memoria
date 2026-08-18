@@ -96,6 +96,18 @@
       <span>Movimentos: <strong id="moves">0</strong></span>
       <span>Pares: <strong id="pairs">0</strong>/4</span>
     </div>
+    <div class="p2p" style="margin-bottom:14px; font-size:14px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button id="createOffer">Criar Offer</button>
+        <button id="acceptOffer">Aceitar Offer</button>
+        <button id="setAnswer">Definir Answer</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <textarea id="localSDP" rows="4" placeholder="Local SDP / copiar" readonly></textarea>
+        <textarea id="remoteSDP" rows="4" placeholder="Colar SDP remoto aqui"></textarea>
+      </div>
+      <div style="margin-top:6px;color:#c7d2fe;">Conexão: <span id="connStatus">desconectado</span></div>
+    </div>
     <div class="board" id="board"></div>
     <button id="restart">Reiniciar</button>
     <p class="message" id="message"></p>
@@ -118,8 +130,12 @@
     let locked = false;
 
     // Cria as cartas e embaralha antes de mostrar
-    function setupGame() {
-      cards = shuffle([...symbols, ...symbols]);
+    function setupGame(initialCards) {
+      if (Array.isArray(initialCards) && initialCards.length) {
+        cards = initialCards.slice();
+      } else {
+        cards = shuffle([...symbols, ...symbols]);
+      }
       board.innerHTML = '';
       flipped = [];
       moves = 0;
@@ -136,7 +152,7 @@
         card.dataset.symbol = symbol;
         card.dataset.index = index;
         card.textContent = symbol;
-        card.addEventListener('click', () => flipCard(card));
+        card.addEventListener('click', () => flipCard(card, true));
         board.appendChild(card);
       });
     }
@@ -194,6 +210,126 @@
 
     restartButton.addEventListener('click', setupGame);
     setupGame();
+
+    // --- WebRTC P2P (manual signaling) ---
+    let pc = null;
+    let dc = null;
+    let isInitiator = false;
+
+    const createOfferBtn = document.getElementById('createOffer');
+    const acceptOfferBtn = document.getElementById('acceptOffer');
+    const setAnswerBtn = document.getElementById('setAnswer');
+    const localSDP = document.getElementById('localSDP');
+    const remoteSDP = document.getElementById('remoteSDP');
+    const connStatus = document.getElementById('connStatus');
+
+    function updateStatus(text) {
+      connStatus.textContent = text;
+    }
+
+    function createPeerConnection() {
+      pc = new RTCPeerConnection();
+
+      pc.ondatachannel = (e) => {
+        dc = e.channel;
+        setupDataChannel();
+      };
+
+      pc.onconnectionstatechange = () => {
+        updateStatus(pc.connectionState);
+      };
+    }
+
+    function setupDataChannel() {
+      dc.onopen = () => {
+        updateStatus('aberto');
+        // if initiator, send initial deck
+        if (isInitiator) {
+          const cardSymbols = cards; // current deck order
+          dc.send(JSON.stringify({ type: 'init', cards: cardSymbols }));
+        }
+      };
+
+      dc.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          handlePeerMessage(msg);
+        } catch (err) {
+          console.error('Mensagem inválida:', e.data);
+        }
+      };
+    }
+
+    function handlePeerMessage(msg) {
+      if (msg.type === 'init') {
+        // initialize deck with provided order
+        setupGame(msg.cards);
+      }
+
+      if (msg.type === 'flip') {
+        const idx = msg.index;
+        const card = board.querySelector(`.card[data-index="${idx}"]`);
+        if (card) flipCard(card, false);
+      }
+
+      if (msg.type === 'restart') {
+        setupGame(msg.cards);
+      }
+    }
+
+    createOfferBtn.addEventListener('click', async () => {
+      isInitiator = true;
+      createPeerConnection();
+      dc = pc.createDataChannel('game');
+      setupDataChannel();
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      localSDP.value = JSON.stringify(pc.localDescription);
+    });
+
+    acceptOfferBtn.addEventListener('click', async () => {
+      // remote receives offer and creates answer
+      const txt = remoteSDP.value.trim();
+      if (!txt) return alert('Cole o offer no campo direito e tente novamente.');
+      const offer = JSON.parse(txt);
+      createPeerConnection();
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      localSDP.value = JSON.stringify(pc.localDescription);
+    });
+
+    setAnswerBtn.addEventListener('click', async () => {
+      const txt = remoteSDP.value.trim();
+      if (!txt) return alert('Cole a answer aqui antes de definir.');
+      const answer = JSON.parse(txt);
+      await pc.setRemoteDescription(answer);
+    });
+
+    // Modify flipCard to optionally suppress sending to peer
+    function flipCard(card, send = true) {
+      if (locked || card.classList.contains('flipped')) {
+        return;
+      }
+
+      card.classList.add('flipped');
+      flipped.push(card);
+
+      if (send && dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'flip', index: Number(card.dataset.index) }));
+      }
+
+      if (flipped.length === 2) {
+        moves += 1;
+        movesCounter.textContent = String(moves);
+        checkMatch();
+      }
+    }
+
+    // Override existing listener attachment to use new flipCard signature
+    // Rebuild board listener hookup when setupGame runs (handled there)
+
   </script>
 </body>
 </html>
