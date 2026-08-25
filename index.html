@@ -1,381 +1,1167 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jogo da Memória</title>
+  <title>Jogo da Memória Multiplayer | Jamstack P2P</title>
+  <meta name="description" content="Jogo da Memória multiplayer em tempo real com WebRTC P2P Serverless sem necessidade de servidor central." />
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+  <!-- Canvas Confetti for Victory Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
   <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #0b2545;
-      color: #f8f9fa;
+    :root {
+      --bg-gradient: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 50%, #020617 100%);
+      --surface: rgba(30, 41, 59, 0.7);
+      --surface-border: rgba(255, 255, 255, 0.1);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --card-bg: #1e293b;
+      --card-back: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.25);
     }
 
-    .game {
-      width: 360px;
-      padding: 18px;
-      background: #15263b;
-      border-radius: 18px;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    /* Background Ambient Glows */
+    .ambient-glow {
+      position: fixed;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.25;
+    }
+    .glow-1 { top: -100px; left: -100px; background: #6366f1; }
+    .glow-2 { bottom: -100px; right: -100px; background: #06b6d4; }
+
+    /* App Container */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-border);
+      border-radius: 28px;
+      padding: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), var(--shadow-glow);
+    }
+
+    /* Header & Mode Selector */
+    header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .title-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 4px 12px;
+      border-radius: 999px;
     }
 
     h1 {
-      margin: 0 0 14px;
+      font-size: 26px;
+      font-weight: 800;
       text-align: center;
-      font-size: 24px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
     }
 
+    /* Mode Switcher Tabs */
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 4px;
+      border-radius: 14px;
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 8px 14px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+
+    /* Lobby Section */
+    .lobby-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+
+    .room-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .room-input {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .room-input:focus {
+      border-color: var(--primary);
+    }
+
+    .action-btn {
+      background: var(--primary);
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .action-btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .action-btn.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--surface-border);
+    }
+
+    .action-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .room-info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .room-code-tag {
+      font-family: monospace;
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .connection-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+
+    .status-dot.connected {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+
+    .status-dot.waiting {
+      background: var(--accent-amber);
+      box-shadow: 0 0 8px var(--accent-amber);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* Scoreboard & Status */
+    .scoreboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .player-card {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .player-card.active-turn {
+      border-color: var(--accent-emerald);
+      background: rgba(16, 185, 129, 0.1);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+    }
+
+    .player-card.active-turn::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--accent-emerald);
+    }
+
+    .player-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .player-card.active-turn .player-name {
+      color: #fff;
+    }
+
+    .player-score {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* Turn Banner */
+    .turn-banner {
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .turn-banner.your-turn {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .turn-banner.opponent-turn {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .turn-banner.solo {
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    /* Game Board & 3D Cards */
     .board {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 12px;
+      margin-bottom: 18px;
+      perspective: 1000px;
     }
 
-    .card {
-      width: 100%;
+    .card-container {
       aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      border: 2px solid #ffffff20;
-      background: #213455;
       cursor: pointer;
-      display: grid;
-      place-items: center;
-      font-size: 32px;
-      color: transparent;
-      transition: transform 0.25s ease, background 0.25s ease;
-      user-select: none;
+      position: relative;
     }
 
-    .card.flipped {
-      background: #f8f9fa;
-      color: #0b2545;
-      transform: scale(1.02);
+    .card-container.disabled {
+      cursor: not-allowed;
     }
 
-    .status {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
-      font-size: 14px;
-    }
-
-    button {
+    .card-inner {
       width: 100%;
-      padding: 10px 0;
-      border: none;
-      border-radius: 999px;
-      background: #4f8cff;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border-radius: 16px;
     }
 
-    button:hover {
-      background: #5f9eff;
+    .card-container.flipped .card-inner {
+      transform: rotateY(180deg);
     }
 
-    .message {
-      text-align: center;
-      min-height: 22px;
-      color: #c7d2fe;
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      user-select: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Card Front (Hidden) */
+    .card-front {
+      background: var(--card-bg);
+      border: 2px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 22px;
+      transition: all 0.2s ease;
+    }
+
+    .card-container:not(.disabled):hover .card-front {
+      border-color: rgba(99, 102, 241, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25);
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Card Back (Revealed) */
+    .card-back {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      font-size: 34px;
+      transform: rotateY(180deg);
+    }
+
+    .card-container.matched .card-back {
+      border-color: var(--accent-emerald);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%);
+      animation: matchPulse 0.5s ease-out;
+    }
+
+    @keyframes matchPulse {
+      0% { transform: rotateY(180deg) scale(0.9); }
+      50% { transform: rotateY(180deg) scale(1.1); }
+      100% { transform: rotateY(180deg) scale(1); }
+    }
+
+    /* Footer Controls */
+    .footer-controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .footer-controls .action-btn {
+      flex: 1;
+      padding: 12px;
       font-size: 14px;
+      border-radius: 12px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid var(--surface-border);
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Winner Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 24px;
+      padding: 32px 24px;
+      text-align: center;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-overlay.show .modal-content {
+      transform: scale(1);
+    }
+
+    .modal-icon {
+      font-size: 56px;
+      margin-bottom: 12px;
+    }
+
+    .modal-title {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .modal-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 400px) {
+      .app-container {
+        padding: 16px;
+      }
+      .board {
+        gap: 8px;
+      }
+      .card-back {
+        font-size: 26px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="game">
-    <h1>Jogo da Memória</h1>
-    <div class="status">
-      <span>Movimentos: <strong id="moves">0</strong></span>
-      <span>Pares: <strong id="pairs">0</strong>/4</span>
-    </div>
-    <div class="p2p" style="margin-bottom:14px; font-size:14px;">
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <button id="createOffer">Criar Offer</button>
-        <button id="acceptOffer">Aceitar Offer</button>
-        <button id="setAnswer">Definir Answer</button>
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <div class="app-container">
+    <header>
+      <div class="title-badge">⚡ Jamstack P2P Serverless</div>
+      <h1>Jogo da Memória</h1>
+      
+      <!-- Mode Tabs -->
+      <div class="mode-tabs">
+        <button id="tabSolo" class="tab-btn active">🎮 Modo Solo</button>
+        <button id="tabMulti" class="tab-btn">🌐 Multiplayer P2P</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <textarea id="localSDP" rows="4" placeholder="Local SDP / copiar" readonly></textarea>
-        <textarea id="remoteSDP" rows="4" placeholder="Colar SDP remoto aqui"></textarea>
+    </header>
+
+    <!-- Multiplayer Lobby (Visible when Multiplayer tab is active) -->
+    <div id="multiplayerLobby" class="lobby-card" style="display: none;">
+      <!-- Not in Room State -->
+      <div id="roomJoinControls" class="room-controls">
+        <div class="input-group">
+          <input type="text" id="roomInput" class="room-input" placeholder="Código da sala (ex: amigos)" maxlength="16" />
+          <button id="joinRoomBtn" class="action-btn">Entrar</button>
+        </div>
+        <button id="createRoomBtn" class="action-btn secondary">✨ Criar Nova Sala Automática</button>
       </div>
-      <div style="margin-top:6px;color:#c7d2fe;">Conexão: <span id="connStatus">desconectado</span></div>
+
+      <!-- In Room State -->
+      <div id="roomActiveInfo" class="room-controls" style="display: none;">
+        <div class="room-info-bar">
+          <div>
+            <span>Sala:</span>
+            <span id="activeRoomCode" class="room-code-tag">---</span>
+          </div>
+          <div class="connection-status">
+            <span id="statusDot" class="status-dot waiting"></span>
+            <span id="statusText">Aguardando oponente...</span>
+          </div>
+        </div>
+        <div class="input-group">
+          <button id="copyInviteBtn" class="action-btn secondary" style="flex: 1;">
+            🔗 Copiar Link de Convite
+          </button>
+          <button id="leaveRoomBtn" class="action-btn secondary" style="padding: 10px 14px; background: rgba(244,63,94,0.15); color: #fda4af;">
+            Sair
+          </button>
+        </div>
+      </div>
     </div>
+
+    <!-- Scoreboard -->
+    <div class="scoreboard">
+      <div id="player1Card" class="player-card active-turn">
+        <div>
+          <div class="player-name" id="p1Label">👤 Jogador 1 (Você)</div>
+          <small style="font-size: 11px; color: var(--text-muted);">Pares encontrados</small>
+        </div>
+        <div class="player-score" id="p1Score">0</div>
+      </div>
+
+      <div id="player2Card" class="player-card">
+        <div>
+          <div class="player-name" id="p2Label">👥 Oponente</div>
+          <small style="font-size: 11px; color: var(--text-muted);" id="p2Sub">Pares encontrados</small>
+        </div>
+        <div class="player-score" id="p2Score">0</div>
+      </div>
+    </div>
+
+    <!-- Turn Banner -->
+    <div id="turnBanner" class="turn-banner solo">
+      <span>✨ Sua vez! Encontre os pares</span>
+    </div>
+
+    <!-- Board -->
     <div class="board" id="board"></div>
-    <button id="restart">Reiniciar</button>
-    <p class="message" id="message"></p>
+
+    <!-- Footer Controls -->
+    <div class="footer-controls">
+      <button id="restartBtn" class="action-btn">🔄 Reiniciar Partida</button>
+    </div>
   </div>
 
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span id="toastIcon">✨</span>
+    <span id="toastMsg">Mensagem</span>
+  </div>
+
+  <!-- Victory / Game Over Modal -->
+  <div id="winnerModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-icon" id="modalIcon">🏆</div>
+      <h2 class="modal-title" id="modalTitle">Vitória!</h2>
+      <p class="modal-desc" id="modalDesc">Você encontrou todos os pares com maestria.</p>
+      <button id="modalRestartBtn" class="action-btn" style="width: 100%;">Jogar Novamente</button>
+    </div>
+  </div>
+
+  <!-- Audio Synthesis (Web Audio API - No external assets required) -->
   <script>
-    // Lista de 4 símbolos diferentes, cada um aparece em par
-    const symbols = ['🍎', '🍌', '🍓', '🍇'];
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playTone(freq, type = 'sine', duration = 0.15, gainVal = 0.1) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        // Audio playback fallback
+      }
+    }
 
-    const board = document.getElementById('board');
-    const movesCounter = document.getElementById('moves');
-    const pairsCounter = document.getElementById('pairs');
-    const message = document.getElementById('message');
-    const restartButton = document.getElementById('restart');
+    const sound = {
+      flip: () => playTone(440, 'triangle', 0.1, 0.08),
+      match: () => {
+        playTone(523.25, 'sine', 0.12, 0.12);
+        setTimeout(() => playTone(659.25, 'sine', 0.12, 0.12), 100);
+        setTimeout(() => playTone(783.99, 'sine', 0.25, 0.15), 200);
+      },
+      miss: () => {
+        playTone(280, 'sawtooth', 0.12, 0.06);
+        setTimeout(() => playTone(220, 'sawtooth', 0.2, 0.06), 120);
+      },
+      win: () => {
+        [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+          setTimeout(() => playTone(f, 'triangle', 0.25, 0.15), i * 140);
+        });
+      }
+    };
+  </script>
 
+  <!-- Game Logic & Trystero P2P Integration -->
+  <script type="module">
+    import { joinRoom, selfId } from 'https://esm.sh/trystero@0.20.1/torrent';
+
+    // Constants & Symbols
+    const SYMBOLS = ['🍎', '🍌', '🍓', '🍇', '🍒', '🥑', '🍍', '🍉'];
+    const TOTAL_PAIRS = SYMBOLS.length;
+
+    // Game State
+    let gameMode = 'solo'; // 'solo' | 'multi'
+    let isHost = true;
+    let localPlayerId = 'p1'; // 'p1' | 'p2'
+    let currentTurn = 'p1';   // 'p1' | 'p2'
     let cards = [];
-    let flipped = [];
-    let moves = 0;
-    let pairs = 0;
-    let locked = false;
+    let flippedCards = [];
+    let matchedIndices = new Set();
+    let p1Score = 0;
+    let p2Score = 0;
+    let soloMoves = 0;
+    let isLocked = false;
+    let isConnected = false;
 
-    // Cria as cartas e embaralha antes de mostrar
-    function setupGame(initialCards) {
-      if (Array.isArray(initialCards) && initialCards.length) {
-        cards = initialCards.slice();
-      } else {
-        cards = shuffle([...symbols, ...symbols]);
-      }
-      board.innerHTML = '';
-      flipped = [];
-      moves = 0;
-      pairs = 0;
-      locked = false;
-      movesCounter.textContent = '0';
-      pairsCounter.textContent = '0';
-      message.textContent = '';
+    // Trystero P2P Objects
+    let room = null;
+    let sendState = null;
+    let sendFlip = null;
+    let sendRestart = null;
 
-      cards.forEach((symbol, index) => {
-        const card = document.createElement('button');
-        card.className = 'card';
-        card.type = 'button';
-        card.dataset.symbol = symbol;
-        card.dataset.index = index;
-        card.textContent = symbol;
-        card.addEventListener('click', () => flipCard(card, true));
-        board.appendChild(card);
-      });
+    // DOM Elements
+    const boardEl = document.getElementById('board');
+    const tabSolo = document.getElementById('tabSolo');
+    const tabMulti = document.getElementById('tabMulti');
+    const multiplayerLobby = document.getElementById('multiplayerLobby');
+    const roomJoinControls = document.getElementById('roomJoinControls');
+    const roomActiveInfo = document.getElementById('roomActiveInfo');
+    const roomInput = document.getElementById('roomInput');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const activeRoomCode = document.getElementById('activeRoomCode');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const copyInviteBtn = document.getElementById('copyInviteBtn');
+    const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    
+    const p1CardEl = document.getElementById('player1Card');
+    const p2CardEl = document.getElementById('player2Card');
+    const p1Label = document.getElementById('p1Label');
+    const p2Label = document.getElementById('p2Label');
+    const p2Sub = document.getElementById('p2Sub');
+    const p1ScoreEl = document.getElementById('p1Score');
+    const p2ScoreEl = document.getElementById('p2Score');
+    const turnBanner = document.getElementById('turnBanner');
+    
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    const toastIcon = document.getElementById('toastIcon');
+    const winnerModal = document.getElementById('winnerModal');
+    const modalIcon = document.getElementById('modalIcon');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalDesc = document.getElementById('modalDesc');
+    const modalRestartBtn = document.getElementById('modalRestartBtn');
+
+    // Show Toast
+    function showToast(msg, icon = '✨') {
+      toastMsg.textContent = msg;
+      toastIcon.textContent = icon;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    // Embaralha o array usando o algoritmo Fisher-Yates
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i -= 1) {
+    // Fisher-Yates Shuffle
+    function generateDeck() {
+      const deck = [...SYMBOLS, ...SYMBOLS];
+      for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
+        [deck[i], deck[j]] = [deck[j], deck[i]];
       }
-      return array;
+      return deck;
     }
 
-    // Quando o jogador vira uma carta
-    function flipCard(card) {
-      if (locked || card.classList.contains('flipped')) {
-        return; // não permite virar cartas enquanto o tabuleiro está bloqueado ou a carta já está virada
-      }
+    // Render Board
+    function renderBoard() {
+      boardEl.innerHTML = '';
+      cards.forEach((symbol, index) => {
+        const container = document.createElement('div');
+        container.className = 'card-container';
+        container.dataset.index = index;
+        container.id = `card-${index}`;
 
-      card.classList.add('flipped');
-      flipped.push(card);
+        const isMatched = matchedIndices.has(index);
+        const isFlipped = flippedCards.some(c => c.index === index) || isMatched;
 
-      if (flipped.length === 2) {
-        moves += 1;
-        movesCounter.textContent = String(moves);
-        checkMatch();
-      }
-    }
+        if (isFlipped) container.classList.add('flipped');
+        if (isMatched) container.classList.add('matched');
 
-    // Verifica se as duas cartas viradas formam um par
-    function checkMatch() {
-      const [first, second] = flipped;
-      const sameSymbol = first.dataset.symbol === second.dataset.symbol;
-
-      if (sameSymbol) {
-        pairs += 1;
-        pairsCounter.textContent = String(pairs);
-        flipped = [];
-
-        if (pairs === symbols.length) {
-          message.textContent = 'Parabéns! Você encontrou todos os pares.';
+        // Check interactivity
+        const canClick = !isLocked && !isMatched && !isFlipped && (gameMode === 'solo' || (isConnected && currentTurn === localPlayerId));
+        if (!canClick) {
+          container.classList.add('disabled');
         }
-        return;
-      }
 
-      // Se não forem par, desvira após um tempo curto
-      locked = true;
-      setTimeout(() => {
-        first.classList.remove('flipped');
-        second.classList.remove('flipped');
-        flipped = [];
-        locked = false;
-      }, 800);
-    }
+        container.innerHTML = `
+          <div class="card-inner">
+            <div class="card-face card-front">?</div>
+            <div class="card-face card-back">${symbol}</div>
+          </div>
+        `;
 
-    restartButton.addEventListener('click', setupGame);
-    setupGame();
-
-    // --- WebRTC P2P (manual signaling) ---
-    let pc = null;
-    let dc = null;
-    let isInitiator = false;
-
-    const createOfferBtn = document.getElementById('createOffer');
-    const acceptOfferBtn = document.getElementById('acceptOffer');
-    const setAnswerBtn = document.getElementById('setAnswer');
-    const localSDP = document.getElementById('localSDP');
-    const remoteSDP = document.getElementById('remoteSDP');
-    const connStatus = document.getElementById('connStatus');
-
-    function updateStatus(text) {
-      connStatus.textContent = text;
-    }
-
-    function createPeerConnection() {
-      // Add a public STUN server to improve NAT traversal
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        container.addEventListener('click', () => handleCardClick(index));
+        boardEl.appendChild(container);
       });
 
-      pc.onicecandidate = (e) => {
-        if (!e.candidate) {
-          // gathering finished
-          console.log('ICE gathering complete');
-        }
-      };
-
-      pc.ondatachannel = (e) => {
-        dc = e.channel;
-        setupDataChannel();
-      };
-
-      pc.onconnectionstatechange = () => {
-        updateStatus(pc.connectionState);
-      };
+      updateUI();
     }
 
-    // Wait until ICE gathering is complete so SDP contains candidates
-    function waitForIceGatheringComplete(pc) {
-      return new Promise((resolve) => {
-        if (pc.iceGatheringState === 'complete') {
-          resolve();
+    // Update Scores & Turn UI
+    function updateUI() {
+      p1ScoreEl.textContent = p1Score;
+      p2ScoreEl.textContent = gameMode === 'solo' ? soloMoves : p2Score;
+
+      if (gameMode === 'solo') {
+        p1Label.textContent = '👤 Pares';
+        p2Label.textContent = '🎯 Movimentos';
+        p2Sub.textContent = 'Total de tentativas';
+        p1CardEl.classList.add('active-turn');
+        p2CardEl.classList.remove('active-turn');
+        turnBanner.className = 'turn-banner solo';
+        turnBanner.innerHTML = `<span>✨ Modo Solo: Encontre os ${TOTAL_PAIRS} pares</span>`;
+      } else {
+        p1Label.textContent = localPlayerId === 'p1' ? '👤 Você (P1)' : '👥 Oponente (P1)';
+        p2Label.textContent = localPlayerId === 'p2' ? '👤 Você (P2)' : '👥 Oponente (P2)';
+        p2Sub.textContent = 'Pares encontrados';
+
+        if (!isConnected) {
+          p1CardEl.classList.remove('active-turn');
+          p2CardEl.classList.remove('active-turn');
+          turnBanner.className = 'turn-banner solo';
+          turnBanner.innerHTML = `<span>⏳ Aguardando Jogador 2 entrar na sala...</span>`;
+          return;
+        }
+
+        const isMyTurn = currentTurn === localPlayerId;
+        p1CardEl.classList.toggle('active-turn', currentTurn === 'p1');
+        p2CardEl.classList.toggle('active-turn', currentTurn === 'p2');
+
+        if (isMyTurn) {
+          turnBanner.className = 'turn-banner your-turn';
+          turnBanner.innerHTML = `<span>🌟 SUA VEZ DE JOGAR! Escolha uma carta</span>`;
         } else {
-          function checkState() {
-            if (pc.iceGatheringState === 'complete') {
-              pc.removeEventListener('icegatheringstatechange', checkState);
-              resolve();
+          turnBanner.className = 'turn-banner opponent-turn';
+          turnBanner.innerHTML = `<span>⏳ Vez do oponente (${currentTurn.toUpperCase()})...</span>`;
+        }
+      }
+    }
+
+    // Handle Local Card Click
+    function handleCardClick(index) {
+      if (isLocked || matchedIndices.has(index)) return;
+      if (flippedCards.some(c => c.index === index)) return;
+
+      if (gameMode === 'multi') {
+        if (!isConnected || currentTurn !== localPlayerId) {
+          showToast('Aguarde a sua vez de jogar!', '⏳');
+          return;
+        }
+        // Send flip event to peer
+        if (sendFlip) sendFlip({ index });
+      }
+
+      applyFlip(index);
+    }
+
+    // Apply Flip (Local or Remote)
+    function applyFlip(index) {
+      sound.flip();
+      flippedCards.push({ index, symbol: cards[index] });
+
+      const cardEl = document.getElementById(`card-${index}`);
+      if (cardEl) {
+        cardEl.classList.add('flipped');
+      }
+
+      if (flippedCards.length === 2) {
+        processPair();
+      }
+    }
+
+    // Check Match
+    function processPair() {
+      isLocked = true;
+      const [c1, c2] = flippedCards;
+      const isMatch = c1.symbol === c2.symbol;
+
+      if (gameMode === 'solo') {
+        soloMoves++;
+      }
+
+      if (isMatch) {
+        setTimeout(() => {
+          sound.match();
+          matchedIndices.add(c1.index);
+          matchedIndices.add(c2.index);
+
+          const el1 = document.getElementById(`card-${c1.index}`);
+          const el2 = document.getElementById(`card-${c2.index}`);
+          if (el1) el1.classList.add('matched');
+          if (el2) el2.classList.add('matched');
+
+          if (gameMode === 'solo') {
+            p1Score++;
+          } else {
+            if (currentTurn === 'p1') p1Score++;
+            else p2Score++;
+          }
+
+          flippedCards = [];
+          isLocked = false;
+          renderBoard();
+          checkGameOver();
+        }, 500);
+      } else {
+        setTimeout(() => {
+          sound.miss();
+          const el1 = document.getElementById(`card-${c1.index}`);
+          const el2 = document.getElementById(`card-${c2.index}`);
+          if (el1) el1.classList.remove('flipped');
+          if (el2) el2.classList.remove('flipped');
+
+          flippedCards = [];
+
+          // Pass turn in multiplayer
+          if (gameMode === 'multi') {
+            currentTurn = currentTurn === 'p1' ? 'p2' : 'p1';
+          }
+
+          isLocked = false;
+          renderBoard();
+        }, 900);
+      }
+    }
+
+    // Check Game Over
+    function checkGameOver() {
+      if (matchedIndices.size === cards.length && cards.length > 0) {
+        sound.win();
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+
+        setTimeout(() => {
+          if (gameMode === 'solo') {
+            modalIcon.textContent = '🎉';
+            modalTitle.textContent = 'Parabéns!';
+            modalDesc.textContent = `Você completou o jogo em ${soloMoves} movimentos!`;
+          } else {
+            const myScore = localPlayerId === 'p1' ? p1Score : p2Score;
+            const oppScore = localPlayerId === 'p1' ? p2Score : p1Score;
+
+            if (myScore > oppScore) {
+              modalIcon.textContent = '🏆';
+              modalTitle.textContent = 'Você Venceu!';
+              modalDesc.textContent = `Placar final: ${myScore} a ${oppScore} pares. Parabéns!`;
+            } else if (myScore < oppScore) {
+              modalIcon.textContent = '🥈';
+              modalTitle.textContent = 'Oponente Venceu!';
+              modalDesc.textContent = `Placar final: ${oppScore} a ${myScore} pares. Bom jogo!`;
+            } else {
+              modalIcon.textContent = '🤝';
+              modalTitle.textContent = 'Empate!';
+              modalDesc.textContent = `Ambos conquistaram ${myScore} pares cada!`;
             }
           }
-          pc.addEventListener('icegatheringstatechange', checkState);
-          // Fallback: also resolve when onicecandidate fires a null candidate
-          const handler = (e) => {
-            if (!e.candidate) {
-              pc.removeEventListener('icegatheringstatechange', checkState);
-              pc.removeEventListener('icecandidate', handler);
-              resolve();
-            }
-          };
-          pc.addEventListener('icecandidate', handler);
-        }
-      });
-    }
-
-    function setupDataChannel() {
-      dc.onopen = () => {
-        updateStatus('aberto');
-        // if initiator, send initial deck
-        if (isInitiator) {
-          const cardSymbols = cards; // current deck order
-          dc.send(JSON.stringify({ type: 'init', cards: cardSymbols }));
-        }
-      };
-
-      dc.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          handlePeerMessage(msg);
-        } catch (err) {
-          console.error('Mensagem inválida:', e.data);
-        }
-      };
-    }
-
-    function handlePeerMessage(msg) {
-      if (msg.type === 'init') {
-        // initialize deck with provided order
-        setupGame(msg.cards);
-      }
-
-      if (msg.type === 'flip') {
-        const idx = msg.index;
-        const card = board.querySelector(`.card[data-index="${idx}"]`);
-        if (card) flipCard(card, false);
-      }
-
-      if (msg.type === 'restart') {
-        setupGame(msg.cards);
+          winnerModal.classList.add('show');
+        }, 400);
       }
     }
 
-    createOfferBtn.addEventListener('click', async () => {
-      isInitiator = true;
-      createPeerConnection();
-      dc = pc.createDataChannel('game');
-      setupDataChannel();
+    // Restart Game
+    function restartGame(broadcast = true) {
+      matchedIndices.clear();
+      flippedCards = [];
+      p1Score = 0;
+      p2Score = 0;
+      soloMoves = 0;
+      isLocked = false;
+      currentTurn = 'p1';
+      winnerModal.classList.remove('show');
 
-      updateStatus('criando offer...');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      updateStatus('coletando candidatos ICE...');
-      await waitForIceGatheringComplete(pc);
-      localSDP.value = JSON.stringify(pc.localDescription);
-      updateStatus('offer pronto (copie e cole)');
-    });
+      if (gameMode === 'solo' || isHost) {
+        cards = generateDeck();
+      }
 
-    acceptOfferBtn.addEventListener('click', async () => {
-      // remote receives offer and creates answer
-      const txt = remoteSDP.value.trim();
-      if (!txt) return alert('Cole o offer no campo direito e tente novamente.');
-      const offer = JSON.parse(txt);
-      createPeerConnection();
-      updateStatus('aceitando offer...');
-      await pc.setRemoteDescription(offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      updateStatus('coletando candidatos ICE...');
-      await waitForIceGatheringComplete(pc);
-      localSDP.value = JSON.stringify(pc.localDescription);
-      updateStatus('answer pronto (copie e cole)');
-    });
+      if (gameMode === 'multi' && broadcast && sendRestart) {
+        sendRestart({ cards, currentTurn: 'p1' });
+      }
 
-    setAnswerBtn.addEventListener('click', async () => {
-      const txt = remoteSDP.value.trim();
-      if (!txt) return alert('Cole a answer aqui antes de definir.');
-      const answer = JSON.parse(txt);
-      updateStatus('definindo answer...');
-      await pc.setRemoteDescription(answer);
-      updateStatus('aguardando conexão...');
-    });
+      renderBoard();
+      showToast('Partida reiniciada!', '🔄');
+    }
 
-    // Modify flipCard to optionally suppress sending to peer
-    function flipCard(card, send = true) {
-      if (locked || card.classList.contains('flipped')) {
+    // --- Trystero P2P Room Logic ---
+    function setupMultiplayerRoom(roomId) {
+      if (room) {
+        room.leave();
+      }
+
+      const cleanRoomId = roomId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+      if (!cleanRoomId) {
+        showToast('Código de sala inválido', '⚠️');
         return;
       }
 
-      card.classList.add('flipped');
-      flipped.push(card);
+      // Update URL Hash without reload
+      window.location.hash = `room=${cleanRoomId}`;
+      activeRoomCode.textContent = `#${cleanRoomId}`;
+      roomJoinControls.style.display = 'none';
+      roomActiveInfo.style.display = 'flex';
+      statusDot.className = 'status-dot waiting';
+      statusText.textContent = 'Conectando ao tracker...';
 
-      if (send && dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'flip', index: Number(card.dataset.index) }));
+      // Join Trystero Room
+      const config = { appId: 'jogo-da-memoria-jamstack-p2p' };
+      room = joinRoom(config, cleanRoomId);
+
+      // Create Actions
+      const [sState, getState] = room.makeAction('syncState');
+      const [sFlip, getFlip] = room.makeAction('flip');
+      const [sRestart, getRestart] = room.makeAction('restart');
+
+      sendState = sState;
+      sendFlip = sFlip;
+      sendRestart = sRestart;
+
+      // Handle Peer Connect
+      room.onPeerJoin(peerId => {
+        isConnected = true;
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Oponente conectado!';
+        showToast('Oponente entrou na sala!', '👥');
+
+        // The peer with alphabetically lower ID acts as host (P1)
+        // This ensures consistent role assignment on both ends
+        isHost = selfId < peerId;
+        localPlayerId = isHost ? 'p1' : 'p2';
+
+        if (isHost) {
+          cards = generateDeck();
+          sendState({
+            cards,
+            currentTurn: 'p1',
+            p1Score: 0,
+            p2Score: 0,
+            matchedIndices: []
+          });
+        }
+        renderBoard();
+      });
+
+      // Handle Peer Leave
+      room.onPeerLeave(peerId => {
+        isConnected = false;
+        statusDot.className = 'status-dot waiting';
+        statusText.textContent = 'Oponente desconectou';
+        showToast('O oponente saiu da sala.', '🔌');
+        renderBoard();
+      });
+
+      // Handle Received Messages
+      getState(data => {
+        cards = data.cards;
+        currentTurn = data.currentTurn;
+        p1Score = data.p1Score;
+        p2Score = data.p2Score;
+        matchedIndices = new Set(data.matchedIndices);
+        flippedCards = [];
+        renderBoard();
+      });
+
+      getFlip(data => {
+        applyFlip(data.index);
+      });
+
+      getRestart(data => {
+        cards = data.cards;
+        currentTurn = data.currentTurn;
+        matchedIndices.clear();
+        flippedCards = [];
+        p1Score = 0;
+        p2Score = 0;
+        winnerModal.classList.remove('show');
+        renderBoard();
+        showToast('O oponente reiniciou a partida!', '🔄');
+      });
+
+      showToast(`Conectado à sala #${cleanRoomId}`, '🌐');
+    }
+
+    function leaveMultiplayerRoom() {
+      if (room) {
+        room.leave();
+        room = null;
       }
+      isConnected = false;
+      window.location.hash = '';
+      roomActiveInfo.style.display = 'none';
+      roomJoinControls.style.display = 'flex';
+      showToast('Você saiu da sala', '👋');
+      restartGame(false);
+    }
 
-      if (flipped.length === 2) {
-        moves += 1;
-        movesCounter.textContent = String(moves);
-        checkMatch();
+    // Event Listeners
+    tabSolo.addEventListener('click', () => {
+      gameMode = 'solo';
+      tabSolo.classList.add('active');
+      tabMulti.classList.remove('active');
+      multiplayerLobby.style.display = 'none';
+      if (room) room.leave();
+      restartGame(false);
+    });
+
+    tabMulti.addEventListener('click', () => {
+      gameMode = 'multi';
+      tabMulti.classList.add('active');
+      tabSolo.classList.remove('active');
+      multiplayerLobby.style.display = 'block';
+      restartGame(false);
+    });
+
+    createRoomBtn.addEventListener('click', () => {
+      const randomCode = 'sala-' + Math.random().toString(36).substring(2, 7);
+      setupMultiplayerRoom(randomCode);
+    });
+
+    joinRoomBtn.addEventListener('click', () => {
+      const code = roomInput.value.trim();
+      if (code) setupMultiplayerRoom(code);
+      else showToast('Digite o código da sala', '✏️');
+    });
+
+    roomInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        joinRoomBtn.click();
+      }
+    });
+
+    leaveRoomBtn.addEventListener('click', leaveMultiplayerRoom);
+
+    copyInviteBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        showToast('Link de convite copiado!', '📋');
+      }).catch(() => {
+        showToast('Erro ao copiar link', '⚠️');
+      });
+    });
+
+    restartBtn.addEventListener('click', () => restartGame(true));
+    modalRestartBtn.addEventListener('click', () => restartGame(true));
+
+    // Auto-join from URL hash if present (e.g. #room=amigos)
+    function checkUrlHash() {
+      const hash = window.location.hash.substring(1);
+      const match = hash.match(/room=([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        tabMulti.click();
+        setupMultiplayerRoom(match[1]);
+      } else {
+        restartGame(false);
       }
     }
 
-    // Override existing listener attachment to use new flipCard signature
-    // Rebuild board listener hookup when setupGame runs (handled there)
-
+    checkUrlHash();
   </script>
 </body>
 </html>
