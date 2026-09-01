@@ -1,381 +1,340 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jogo da Memória</title>
+  <title>Jogo da Memória Multiplayer | Jamstack P2P</title>
+  <meta name="description" content="Jogo da Memória multiplayer em tempo real com WebRTC P2P Serverless sem necessidade de servidor central." />
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
   <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #0b2545;
-      color: #f8f9fa;
+    :root {
+      --bg: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 50%, #020617 100%);
+      --surface: rgba(30, 41, 59, 0.75);
+      --border: rgba(255, 255, 255, 0.12);
+      --primary: #6366f1;
+      --primary-h: #4f46e5;
+      --cyan: #06b6d4;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --glow: 0 0 25px rgba(99, 102, 241, 0.25);
     }
-
-    .game {
-      width: 360px;
-      padding: 18px;
-      background: #15263b;
-      border-radius: 18px;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-    }
-
-    h1 {
-      margin: 0 0 14px;
-      text-align: center;
-      font-size: 24px;
-    }
-
-    .board {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    .card {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      border: 2px solid #ffffff20;
-      background: #213455;
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      font-size: 32px;
-      color: transparent;
-      transition: transform 0.25s ease, background 0.25s ease;
-      user-select: none;
-    }
-
-    .card.flipped {
-      background: #f8f9fa;
-      color: #0b2545;
-      transform: scale(1.02);
-    }
-
-    .status {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      padding: 10px 0;
-      border: none;
-      border-radius: 999px;
-      background: #4f8cff;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #5f9eff;
-    }
-
-    .message {
-      text-align: center;
-      min-height: 22px;
-      color: #c7d2fe;
-      font-size: 14px;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { min-height: 100vh; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; overflow-x: hidden; }
+    .glow-bg { position: fixed; width: 350px; height: 350px; border-radius: 50%; filter: blur(100px); pointer-events: none; opacity: 0.2; }
+    .glow-1 { top: -60px; left: -60px; background: var(--primary); }
+    .glow-2 { bottom: -60px; right: -60px; background: var(--cyan); }
+    .container { position: relative; z-index: 1; width: 100%; max-width: 440px; background: var(--surface); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 24px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5), var(--glow); }
+    header { text-align: center; margin-bottom: 16px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan); background: rgba(6,182,212,0.12); border: 1px solid rgba(6,182,212,0.3); padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+    h1 { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, #fff, #cbd5e1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; background: rgba(15, 23, 42, 0.6); padding: 4px; border-radius: 12px; margin-top: 12px; border: 1px solid rgba(255,255,255,0.06); }
+    .tab { background: transparent; border: none; padding: 8px; color: var(--muted); font-size: 13px; font-weight: 600; border-radius: 9px; cursor: pointer; transition: all 0.2s; }
+    .tab.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(99,102,241,0.35); }
+    .lobby { background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 14px; display: none; }
+    .flex-row { display: flex; gap: 8px; }
+    .input { flex: 1; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 9px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
+    .input:focus { border-color: var(--primary); }
+    .btn { background: var(--primary); border: none; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 9px; cursor: pointer; transition: all 0.2s; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn:hover { background: var(--primary-h); }
+    .btn.sec { background: rgba(255,255,255,0.08); border: 1px solid var(--border); }
+    .btn.sec:hover { background: rgba(255,255,255,0.15); }
+    .room-bar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+    .code-tag { font-family: monospace; font-weight: 700; background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 2px 6px; border-radius: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; background: #ef4444; }
+    .dot.connected { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+    .dot.waiting { background: var(--amber); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .player-card { background: rgba(15,23,42,0.5); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s; }
+    .player-card.active-turn { border-color: var(--emerald); background: rgba(16,185,129,0.1); box-shadow: 0 0 12px rgba(16,185,129,0.2); }
+    .score { font-size: 18px; font-weight: 800; }
+    .turn-banner { text-align: center; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 14px; background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+    .turn-banner.your-turn { background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.3); }
+    .turn-banner.opp-turn { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+    .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; perspective: 800px; }
+    .card { aspect-ratio: 1; cursor: pointer; position: relative; }
+    .card.disabled { cursor: not-allowed; }
+    .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); border-radius: 14px; }
+    .card.flipped .card-inner { transform: rotateY(180deg); }
+    .face { position: absolute; inset: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; backface-visibility: hidden; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
+    .face-front { background: #1e293b; border: 2px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.2); font-size: 20px; }
+    .card:not(.disabled):hover .face-front { border-color: var(--primary); transform: translateY(-2px); color: rgba(255,255,255,0.5); }
+    .face-back { background: linear-gradient(135deg, #1e293b, #334155); border: 2px solid rgba(255,255,255,0.2); font-size: 30px; transform: rotateY(180deg); }
+    .card.matched .face-back { border-color: var(--emerald); background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(6,182,212,0.2)); }
+    .toast { position: fixed; bottom: 20px; background: #1e293b; color: #fff; border: 1px solid var(--border); padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: 0 10px 20px rgba(0,0,0,0.4); transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 100; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .modal { position: fixed; inset: 0; background: rgba(2,6,23,0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+    .modal.show { opacity: 1; pointer-events: auto; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; text-align: center; max-width: 320px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
   </style>
 </head>
 <body>
-  <div class="game">
-    <h1>Jogo da Memória</h1>
-    <div class="status">
-      <span>Movimentos: <strong id="moves">0</strong></span>
-      <span>Pares: <strong id="pairs">0</strong>/4</span>
-    </div>
-    <div class="p2p" style="margin-bottom:14px; font-size:14px;">
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <button id="createOffer">Criar Offer</button>
-        <button id="acceptOffer">Aceitar Offer</button>
-        <button id="setAnswer">Definir Answer</button>
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <div class="container">
+    <header>
+      <div class="badge">⚡ Jamstack P2P Serverless</div>
+      <h1>Jogo da Memória</h1>
+      <div class="tabs">
+        <button id="tabSolo" class="tab active">🎮 Modo Solo</button>
+        <button id="tabMulti" class="tab">🌐 Multiplayer P2P</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <textarea id="localSDP" rows="4" placeholder="Local SDP / copiar" readonly></textarea>
-        <textarea id="remoteSDP" rows="4" placeholder="Colar SDP remoto aqui"></textarea>
+    </header>
+
+    <div id="lobby" class="lobby">
+      <div id="joinControls" class="flex-row" style="flex-direction:column; gap:8px;">
+        <div class="flex-row">
+          <input type="text" id="roomInput" class="input" placeholder="Código da sala (ex: amigos)" maxlength="16" />
+          <button id="joinBtn" class="btn">Entrar</button>
+        </div>
+        <button id="createBtn" class="btn sec">✨ Criar Sala Automática</button>
       </div>
-      <div style="margin-top:6px;color:#c7d2fe;">Conexão: <span id="connStatus">desconectado</span></div>
+
+      <div id="activeInfo" style="display:none; flex-direction:column; gap:8px;">
+        <div class="room-bar">
+          <div>Sala: <span id="roomCode" class="code-tag">---</span></div>
+          <div><span id="dot" class="dot waiting"></span><span id="connStatus" style="font-size:11px;color:var(--muted)">Aguardando...</span></div>
+        </div>
+        <div class="flex-row">
+          <button id="copyBtn" class="btn sec" style="flex:1;">🔗 Copiar Link</button>
+          <button id="leaveBtn" class="btn sec" style="background:rgba(244,63,94,0.15);color:#fda4af;">Sair</button>
+        </div>
+      </div>
     </div>
+
+    <div class="scoreboard">
+      <div id="p1Card" class="player-card active-turn">
+        <div>
+          <div id="p1Name" style="font-size:12px;font-weight:600;color:var(--muted)">👤 Jogador 1</div>
+          <small style="font-size:10px;color:var(--muted)" id="p1Sub">Pares</small>
+        </div>
+        <div class="score" id="p1Score">0</div>
+      </div>
+      <div id="p2Card" class="player-card">
+        <div>
+          <div id="p2Name" style="font-size:12px;font-weight:600;color:var(--muted)">👥 Oponente</div>
+          <small style="font-size:10px;color:var(--muted)" id="p2Sub">Pares</small>
+        </div>
+        <div class="score" id="p2Score">0</div>
+      </div>
+    </div>
+
+    <div id="turnBanner" class="turn-banner"><span>✨ Modo Solo: Encontre os pares</span></div>
     <div class="board" id="board"></div>
-    <button id="restart">Reiniciar</button>
-    <p class="message" id="message"></p>
+    <button id="restartBtn" class="btn" style="width:100%;">🔄 Reiniciar Partida</button>
+  </div>
+
+  <div id="toast" class="toast"><span id="toastMsg">Mensagem</span></div>
+
+  <div id="modal" class="modal">
+    <div class="modal-box">
+      <div id="modalIcon" style="font-size:48px;margin-bottom:8px;">🏆</div>
+      <h2 id="modalTitle" style="font-size:20px;font-weight:800;margin-bottom:6px;">Vitória!</h2>
+      <p id="modalDesc" style="font-size:13px;color:var(--muted);margin-bottom:16px;"></p>
+      <button id="modalRestartBtn" class="btn" style="width:100%;">Jogar Novamente</button>
+    </div>
   </div>
 
   <script>
-    // Lista de 4 símbolos diferentes, cada um aparece em par
-    const symbols = ['🍎', '🍌', '🍓', '🍇'];
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, duration, gainVal) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      try {
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+    const sound = {
+      flip: () => playTone(440, 'triangle', 0.1, 0.08),
+      match: () => { playTone(523, 'sine', 0.1, 0.1); setTimeout(() => playTone(659, 'sine', 0.1, 0.1), 100); setTimeout(() => playTone(784, 'sine', 0.2, 0.12), 200); },
+      miss: () => { playTone(280, 'sawtooth', 0.1, 0.05); setTimeout(() => playTone(220, 'sawtooth', 0.15, 0.05), 100); },
+      win: () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'triangle', 0.2, 0.12), i * 120))
+    };
+  </script>
 
-    const board = document.getElementById('board');
-    const movesCounter = document.getElementById('moves');
-    const pairsCounter = document.getElementById('pairs');
-    const message = document.getElementById('message');
-    const restartButton = document.getElementById('restart');
+  <script type="module">
+    import { joinRoom, selfId } from 'https://esm.sh/trystero@0.20.1/torrent';
 
-    let cards = [];
-    let flipped = [];
-    let moves = 0;
-    let pairs = 0;
-    let locked = false;
+    const SYMBOLS = ['🍎', '🍌', '🍓', '🍇', '🍒', '🥑', '🍍', '🍉'];
+    let mode = 'solo', isHost = true, myId = 'p1', turn = 'p1', cards = [], flipped = [], matched = new Set();
+    let p1Score = 0, p2Score = 0, soloMoves = 0, locked = false, connected = false;
+    let room = null, sendState = null, sendFlip = null, sendRestart = null;
 
-    // Cria as cartas e embaralha antes de mostrar
-    function setupGame(initialCards) {
-      if (Array.isArray(initialCards) && initialCards.length) {
-        cards = initialCards.slice();
-      } else {
-        cards = shuffle([...symbols, ...symbols]);
-      }
+    const board = document.getElementById('board'), tabSolo = document.getElementById('tabSolo'), tabMulti = document.getElementById('tabMulti');
+    const lobby = document.getElementById('lobby'), joinControls = document.getElementById('joinControls'), activeInfo = document.getElementById('activeInfo');
+    const roomInput = document.getElementById('roomInput'), joinBtn = document.getElementById('joinBtn'), createBtn = document.getElementById('createBtn');
+    const roomCode = document.getElementById('roomCode'), dot = document.getElementById('dot'), connStatus = document.getElementById('connStatus');
+    const copyBtn = document.getElementById('copyBtn'), leaveBtn = document.getElementById('leaveBtn'), restartBtn = document.getElementById('restartBtn');
+    const p1Card = document.getElementById('p1Card'), p2Card = document.getElementById('p2Card'), p1Name = document.getElementById('p1Name'), p2Name = document.getElementById('p2Name'), p1Sub = document.getElementById('p1Sub'), p2Sub = document.getElementById('p2Sub');
+    const p1ScoreEl = document.getElementById('p1Score'), p2ScoreEl = document.getElementById('p2Score'), turnBanner = document.getElementById('turnBanner');
+    const toast = document.getElementById('toast'), toastMsg = document.getElementById('toastMsg');
+    const modal = document.getElementById('modal'), modalIcon = document.getElementById('modalIcon'), modalTitle = document.getElementById('modalTitle'), modalDesc = document.getElementById('modalDesc'), modalRestartBtn = document.getElementById('modalRestartBtn');
+
+    function notify(msg) { toastMsg.textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2500); }
+    function shuffle() {
+      const d = [...SYMBOLS, ...SYMBOLS];
+      for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+      return d;
+    }
+
+    function render() {
       board.innerHTML = '';
-      flipped = [];
-      moves = 0;
-      pairs = 0;
-      locked = false;
-      movesCounter.textContent = '0';
-      pairsCounter.textContent = '0';
-      message.textContent = '';
-
-      cards.forEach((symbol, index) => {
-        const card = document.createElement('button');
-        card.className = 'card';
-        card.type = 'button';
-        card.dataset.symbol = symbol;
-        card.dataset.index = index;
-        card.textContent = symbol;
-        card.addEventListener('click', () => flipCard(card, true));
-        board.appendChild(card);
+      cards.forEach((sym, idx) => {
+        const c = document.createElement('div');
+        c.className = 'card' + (flipped.some(f => f.idx === idx) || matched.has(idx) ? ' flipped' : '') + (matched.has(idx) ? ' matched' : '');
+        if (locked || matched.has(idx) || (mode === 'multi' && (!connected || turn !== myId))) c.classList.add('disabled');
+        c.innerHTML = `<div class="card-inner"><div class="face face-front">?</div><div class="face face-back">${sym}</div></div>`;
+        c.addEventListener('click', () => onCardClick(idx));
+        board.appendChild(c);
       });
-    }
 
-    // Embaralha o array usando o algoritmo Fisher-Yates
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    // Quando o jogador vira uma carta
-    function flipCard(card) {
-      if (locked || card.classList.contains('flipped')) {
-        return; // não permite virar cartas enquanto o tabuleiro está bloqueado ou a carta já está virada
-      }
-
-      card.classList.add('flipped');
-      flipped.push(card);
-
-      if (flipped.length === 2) {
-        moves += 1;
-        movesCounter.textContent = String(moves);
-        checkMatch();
+      p1ScoreEl.textContent = p1Score;
+      p2ScoreEl.textContent = mode === 'solo' ? soloMoves : p2Score;
+      if (mode === 'solo') {
+        p1Name.textContent = '👤 Pares'; p2Name.textContent = '🎯 Tentativas'; p1Sub.textContent = 'Pares'; p2Sub.textContent = 'Total';
+        p1Card.classList.add('active-turn'); p2Card.classList.remove('active-turn');
+        turnBanner.className = 'turn-banner'; turnBanner.textContent = '✨ Modo Solo: Encontre todos os 8 pares';
+      } else {
+        p1Name.textContent = myId === 'p1' ? '👤 Você (P1)' : '👥 Oponente (P1)';
+        p2Name.textContent = myId === 'p2' ? '👤 Você (P2)' : '👥 Oponente (P2)';
+        p1Sub.textContent = 'Pares'; p2Sub.textContent = 'Pares';
+        p1Card.classList.toggle('active-turn', turn === 'p1'); p2Card.classList.toggle('active-turn', turn === 'p2');
+        if (!connected) { turnBanner.className = 'turn-banner'; turnBanner.textContent = '⏳ Aguardando Jogador 2 entrar na sala...'; }
+        else if (turn === myId) { turnBanner.className = 'turn-banner your-turn'; turnBanner.textContent = '🌟 SUA VEZ! Escolha uma carta'; }
+        else { turnBanner.className = 'turn-banner opp-turn'; turnBanner.textContent = `⏳ Vez do oponente (${turn.toUpperCase()})...`; }
       }
     }
 
-    // Verifica se as duas cartas viradas formam um par
-    function checkMatch() {
-      const [first, second] = flipped;
-      const sameSymbol = first.dataset.symbol === second.dataset.symbol;
-
-      if (sameSymbol) {
-        pairs += 1;
-        pairsCounter.textContent = String(pairs);
-        flipped = [];
-
-        if (pairs === symbols.length) {
-          message.textContent = 'Parabéns! Você encontrou todos os pares.';
-        }
-        return;
+    function onCardClick(idx) {
+      if (locked || matched.has(idx) || flipped.some(f => f.idx === idx)) return;
+      if (mode === 'multi') {
+        if (!connected || turn !== myId) return notify('Aguarde a sua vez!');
+        if (sendFlip) sendFlip({ idx });
       }
+      flipCard(idx);
+    }
 
-      // Se não forem par, desvira após um tempo curto
+    function flipCard(idx) {
+      sound.flip();
+      flipped.push({ idx, sym: cards[idx] });
+      render();
+      if (flipped.length === 2) checkPair();
+    }
+
+    function checkPair() {
       locked = true;
+      const [c1, c2] = flipped, isMatch = c1.sym === c2.sym;
+      if (mode === 'solo') soloMoves++;
+
       setTimeout(() => {
-        first.classList.remove('flipped');
-        second.classList.remove('flipped');
-        flipped = [];
-        locked = false;
-      }, 800);
-    }
-
-    restartButton.addEventListener('click', setupGame);
-    setupGame();
-
-    // --- WebRTC P2P (manual signaling) ---
-    let pc = null;
-    let dc = null;
-    let isInitiator = false;
-
-    const createOfferBtn = document.getElementById('createOffer');
-    const acceptOfferBtn = document.getElementById('acceptOffer');
-    const setAnswerBtn = document.getElementById('setAnswer');
-    const localSDP = document.getElementById('localSDP');
-    const remoteSDP = document.getElementById('remoteSDP');
-    const connStatus = document.getElementById('connStatus');
-
-    function updateStatus(text) {
-      connStatus.textContent = text;
-    }
-
-    function createPeerConnection() {
-      // Add a public STUN server to improve NAT traversal
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-      });
-
-      pc.onicecandidate = (e) => {
-        if (!e.candidate) {
-          // gathering finished
-          console.log('ICE gathering complete');
-        }
-      };
-
-      pc.ondatachannel = (e) => {
-        dc = e.channel;
-        setupDataChannel();
-      };
-
-      pc.onconnectionstatechange = () => {
-        updateStatus(pc.connectionState);
-      };
-    }
-
-    // Wait until ICE gathering is complete so SDP contains candidates
-    function waitForIceGatheringComplete(pc) {
-      return new Promise((resolve) => {
-        if (pc.iceGatheringState === 'complete') {
-          resolve();
+        if (isMatch) {
+          sound.match();
+          matched.add(c1.idx); matched.add(c2.idx);
+          if (mode === 'solo') p1Score++;
+          else if (turn === 'p1') p1Score++; else p2Score++;
+          flipped = []; locked = false; render();
+          if (matched.size === cards.length && cards.length > 0) gameOver();
         } else {
-          function checkState() {
-            if (pc.iceGatheringState === 'complete') {
-              pc.removeEventListener('icegatheringstatechange', checkState);
-              resolve();
-            }
-          }
-          pc.addEventListener('icegatheringstatechange', checkState);
-          // Fallback: also resolve when onicecandidate fires a null candidate
-          const handler = (e) => {
-            if (!e.candidate) {
-              pc.removeEventListener('icegatheringstatechange', checkState);
-              pc.removeEventListener('icecandidate', handler);
-              resolve();
-            }
-          };
-          pc.addEventListener('icecandidate', handler);
+          sound.miss();
+          flipped = [];
+          if (mode === 'multi') turn = turn === 'p1' ? 'p2' : 'p1';
+          locked = false; render();
         }
+      }, isMatch ? 400 : 800);
+    }
+
+    function gameOver() {
+      sound.win();
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      setTimeout(() => {
+        if (mode === 'solo') {
+          modalIcon.textContent = '🎉'; modalTitle.textContent = 'Parabéns!'; modalDesc.textContent = `Você completou em ${soloMoves} tentativas!`;
+        } else {
+          const s1 = myId === 'p1' ? p1Score : p2Score, s2 = myId === 'p1' ? p2Score : p1Score;
+          modalIcon.textContent = s1 > s2 ? '🏆' : (s1 < s2 ? '🥈' : '🤝');
+          modalTitle.textContent = s1 > s2 ? 'Você Venceu!' : (s1 < s2 ? 'Oponente Venceu!' : 'Empate!');
+          modalDesc.textContent = `Placar: ${s1} a ${s2} pares.`;
+        }
+        modal.classList.add('show');
+      }, 300);
+    }
+
+    function reset(broadcast = true) {
+      matched.clear(); flipped = []; p1Score = 0; p2Score = 0; soloMoves = 0; locked = false; turn = 'p1';
+      modal.classList.remove('show');
+      if (mode === 'solo' || isHost) cards = shuffle();
+      if (mode === 'multi' && broadcast && sendRestart) sendRestart({ cards, turn: 'p1' });
+      render();
+    }
+
+    function join(id) {
+      if (room) room.leave();
+      const code = id.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+      if (!code) return notify('Código inválido');
+      window.location.hash = `room=${code}`;
+      roomCode.textContent = `#${code}`;
+      joinControls.style.display = 'none'; activeInfo.style.display = 'flex';
+      dot.className = 'dot waiting'; connStatus.textContent = 'Conectando...';
+
+      room = joinRoom({ appId: 'jogo-da-memoria-jamstack' }, code);
+      const [sState, getState] = room.makeAction('syncState');
+      const [sFlip, getFlip] = room.makeAction('flip');
+      const [sRestart, getRestart] = room.makeAction('restart');
+      sendState = sState; sendFlip = sFlip; sendRestart = sRestart;
+
+      room.onPeerJoin(peerId => {
+        connected = true; dot.className = 'dot connected'; connStatus.textContent = 'Oponente conectado!';
+        notify('Oponente conectado!');
+        isHost = selfId < peerId; myId = isHost ? 'p1' : 'p2';
+        if (isHost) {
+          cards = shuffle();
+          sendState({ cards, turn: 'p1', p1Score: 0, p2Score: 0, matched: [] });
+        }
+        render();
       });
+
+      room.onPeerLeave(() => {
+        connected = false; dot.className = 'dot waiting'; connStatus.textContent = 'Oponente desconectou';
+        notify('Oponente saiu da sala.'); render();
+      });
+
+      getState(d => { cards = d.cards; turn = d.turn; p1Score = d.p1Score; p2Score = d.p2Score; matched = new Set(d.matched); flipped = []; render(); });
+      getFlip(d => flipCard(d.idx));
+      getRestart(d => { cards = d.cards; turn = d.turn; matched.clear(); flipped = []; p1Score = 0; p2Score = 0; modal.classList.remove('show'); render(); notify('Partida reiniciada!'); });
+      notify(`Entrou na sala #${code}`);
     }
 
-    function setupDataChannel() {
-      dc.onopen = () => {
-        updateStatus('aberto');
-        // if initiator, send initial deck
-        if (isInitiator) {
-          const cardSymbols = cards; // current deck order
-          dc.send(JSON.stringify({ type: 'init', cards: cardSymbols }));
-        }
-      };
-
-      dc.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          handlePeerMessage(msg);
-        } catch (err) {
-          console.error('Mensagem inválida:', e.data);
-        }
-      };
+    function leave() {
+      if (room) { room.leave(); room = null; }
+      connected = false; window.location.hash = '';
+      activeInfo.style.display = 'none'; joinControls.style.display = 'flex';
+      reset(false); notify('Você saiu da sala.');
     }
 
-    function handlePeerMessage(msg) {
-      if (msg.type === 'init') {
-        // initialize deck with provided order
-        setupGame(msg.cards);
-      }
+    tabSolo.addEventListener('click', () => { mode = 'solo'; tabSolo.classList.add('active'); tabMulti.classList.remove('active'); lobby.style.display = 'none'; if (room) room.leave(); reset(false); });
+    tabMulti.addEventListener('click', () => { mode = 'multi'; tabMulti.classList.add('active'); tabSolo.classList.remove('active'); lobby.style.display = 'block'; reset(false); });
+    createBtn.addEventListener('click', () => join('sala-' + Math.random().toString(36).substring(2, 7)));
+    joinBtn.addEventListener('click', () => { const v = roomInput.value.trim(); if (v) join(v); else notify('Digite o código!'); });
+    roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
+    leaveBtn.addEventListener('click', leave);
+    copyBtn.addEventListener('click', () => navigator.clipboard.writeText(window.location.href).then(() => notify('Link copiado!')).catch(() => notify('Erro ao copiar')));
+    restartBtn.addEventListener('click', () => reset(true));
+    modalRestartBtn.addEventListener('click', () => reset(true));
 
-      if (msg.type === 'flip') {
-        const idx = msg.index;
-        const card = board.querySelector(`.card[data-index="${idx}"]`);
-        if (card) flipCard(card, false);
-      }
-
-      if (msg.type === 'restart') {
-        setupGame(msg.cards);
-      }
-    }
-
-    createOfferBtn.addEventListener('click', async () => {
-      isInitiator = true;
-      createPeerConnection();
-      dc = pc.createDataChannel('game');
-      setupDataChannel();
-
-      updateStatus('criando offer...');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      updateStatus('coletando candidatos ICE...');
-      await waitForIceGatheringComplete(pc);
-      localSDP.value = JSON.stringify(pc.localDescription);
-      updateStatus('offer pronto (copie e cole)');
-    });
-
-    acceptOfferBtn.addEventListener('click', async () => {
-      // remote receives offer and creates answer
-      const txt = remoteSDP.value.trim();
-      if (!txt) return alert('Cole o offer no campo direito e tente novamente.');
-      const offer = JSON.parse(txt);
-      createPeerConnection();
-      updateStatus('aceitando offer...');
-      await pc.setRemoteDescription(offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      updateStatus('coletando candidatos ICE...');
-      await waitForIceGatheringComplete(pc);
-      localSDP.value = JSON.stringify(pc.localDescription);
-      updateStatus('answer pronto (copie e cole)');
-    });
-
-    setAnswerBtn.addEventListener('click', async () => {
-      const txt = remoteSDP.value.trim();
-      if (!txt) return alert('Cole a answer aqui antes de definir.');
-      const answer = JSON.parse(txt);
-      updateStatus('definindo answer...');
-      await pc.setRemoteDescription(answer);
-      updateStatus('aguardando conexão...');
-    });
-
-    // Modify flipCard to optionally suppress sending to peer
-    function flipCard(card, send = true) {
-      if (locked || card.classList.contains('flipped')) {
-        return;
-      }
-
-      card.classList.add('flipped');
-      flipped.push(card);
-
-      if (send && dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'flip', index: Number(card.dataset.index) }));
-      }
-
-      if (flipped.length === 2) {
-        moves += 1;
-        movesCounter.textContent = String(moves);
-        checkMatch();
-      }
-    }
-
-    // Override existing listener attachment to use new flipCard signature
-    // Rebuild board listener hookup when setupGame runs (handled there)
-
+    const hash = window.location.hash.substring(1), match = hash.match(/room=([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) { tabMulti.click(); join(match[1]); } else reset(false);
   </script>
 </body>
 </html>
